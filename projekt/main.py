@@ -26,4 +26,4 @@ if __name__ == "__main__":
             break
         response = client.send_command(command)
         print(f"Respons fra serveren: {response}")
-
+        print(f"TEST")
