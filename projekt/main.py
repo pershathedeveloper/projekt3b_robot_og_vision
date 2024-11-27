@@ -27,3 +27,4 @@ if __name__ == "__main__":
         response = client.send_command(command)
         print(f"Respons fra serveren: {response}")
         print(f"TEST")
+        print(f"Persha's TEST")
