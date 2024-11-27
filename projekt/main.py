@@ -1,30 +1,24 @@
-import socket
+from robot_control import UR3Robot
 
-class RobotClient:
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-
-    def send_command(self, command):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((self.host, self.port))
-            client_socket.sendall(command.encode("utf-8"))
-            response = client_socket.recv(1024).decode("utf-8")
-            return response
+# Robot IP
+ROBOT_IP = "192.168.0.51"
+PORT = 12345  # Standardport til URScript
 
 if __name__ == "__main__":
-    host = "192.168.0.51"  # IP-adressen på serveren
-    port = 30006  # Serverens port
+    # Opret robot-objekt
+    robot = UR3Robot(ROBOT_IP, PORT)
 
-    client = RobotClient(host, port)
+    try:
+        # Forbind til robotten
+        robot.connect()
 
-    print("Indtast 'move_to_position' for at flytte robotten eller 'stop' for at stoppe")
-    while True:
-        command = input("> ")
-        if command.lower() == "exit":
-            print("Lukker klienten...")
-            break
-        response = client.send_command(command)
-        print(f"Respons fra serveren: {response}")
-        print(f"TEST")
-        print(f"Persha's TEST")
+        # Flyt robotten til joint positions
+        robot.move_to_joint_positions()
+
+    except Exception as e:
+        print(f"Fejl under programkørsel: {e}")
+
+    finally:
+        # Luk forbindelsen
+        robot.disconnect()
+
