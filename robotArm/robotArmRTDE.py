@@ -1,7 +1,7 @@
 import socket
 
 class RobotArmRTDE:
-    def __init__(self, ip_address="192.168.1.10", port=30004):
+    def __init__(self, ip_address="192.168.0.51", port=30004):
         self.ip_address = ip_address
         self.port = port
         self.socket = None
