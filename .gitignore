@@ -1,2 +1,14 @@
 
 .vscode/
+
+robotArm/__pycache__/robotArmController.cpython-313.pyc
+
+robotArm/__pycache__/robotArmKinematics.cpython-313.pyc
+
+robotArm/__pycache__/robotArmRTDE.cpython-313.pyc
+
+tests/__pycache__/testRobotArm.cpython-313.pyc
+
+tests/__pycache__/testVisionCamera.cpython-313.pyc
+
+vision/__pycache__/visionCameraController.cpython-313.pyc
