@@ -1,5 +1,4 @@
 
-<<<<<<< HEAD
 .vscode/
 
 robotArm/__pycache__/robotArmController.cpython-313.pyc
@@ -13,6 +12,6 @@ tests/__pycache__/testRobotArm.cpython-313.pyc
 tests/__pycache__/testVisionCamera.cpython-313.pyc
 
 vision/__pycache__/visionCameraController.cpython-313.pyc
-=======
 .vscode/ 
->>>>>>> origin/main
+
+other/
