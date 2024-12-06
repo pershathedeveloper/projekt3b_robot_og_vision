@@ -30,99 +30,75 @@ class OakDCamera:
         frame = in_video.getCvFrame()
         return frame
 
-    def detect_objects(self, frame, lower_color, upper_color):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask1 = cv2.inRange(hsv, lower_color[0], upper_color[0])
-        mask2 = cv2.inRange(hsv, lower_color[1], upper_color[1])
-        mask = cv2.bitwise_or(mask1, mask2)
+    def take_picture(self, filename):
+        frame = self.get_frame()
+        cv2.imwrite(filename, frame)
+        print(f"Billede gemt som {filename}")
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        detected_objects = []
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < 500:  # Filtrer meget små objekter
-                continue
+    def stream_video(self):
+        while True:
+            frame = self.get_frame()
+            cv2.imshow("Video Stream", frame)
 
-            x, y, w, h = cv2.boundingRect(contour)
-            epsilon = 0.02 * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
+            # Tryk på 'q' for at afslutte streamen
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-            if len(approx) >= 8:  # Hvis konturen har mange hjørner, er det sandsynligvis en cirkel
-                shape = "circle"
-                detected_objects.append((shape, x, y, w, h, self.color_name))
-                
-        return detected_objects
+        cv2.destroyAllWindows()
 
 class ObjectDetector:
-    def __init__(self, lower_color1, upper_color1, lower_color2, upper_color2, color_name):
-        self.lower_color1 = lower_color1
-        self.upper_color1 = upper_color1
-        self.lower_color2 = lower_color2
-        self.upper_color2 = upper_color2
-        self.color_name = color_name
+    def __init__(self, colors):
+        self.colors = colors
 
-    def detect_object(self, frame):
+    def detect_objects(self, frame):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask1 = cv2.inRange(hsv, self.lower_color1, self.upper_color1)
-        mask2 = cv2.inRange(hsv, self.lower_color2, self.upper_color2)
-        mask = cv2.bitwise_or(mask1, mask2)
-
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         detected_objects = []
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < 500:  # Filtrer meget små objekter
-                continue
 
-            x, y, w, h = cv2.boundingRect(contour)
-            epsilon = 0.02 * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
+        for color in self.colors:
+            lower_color1, upper_color1, lower_color2, upper_color2, color_name = color
+            mask1 = cv2.inRange(hsv, lower_color1, upper_color1)
+            mask2 = cv2.inRange(hsv, lower_color2, upper_color2)
+            mask = cv2.bitwise_or(mask1, mask2)
 
-            if len(approx) >= 8:  # Hvis konturen har mange hjørner, er det sandsynligvis en cirkel
-                shape = "circle"
-                detected_objects.append((shape, x, y, w, h, self.color_name))
-                
+            contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area < 500:  # Filtrer meget små objekter
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                epsilon = 0.02 * cv2.arcLength(contour, True)
+                approx = cv2.approxPolyDP(contour, epsilon, True)
+
+                if len(approx) >= 8:  # Hvis konturen har mange hjørner, er det sandsynligvis en cirkel
+                    shape = "circle"
+                    detected_objects.append((shape, x, y, w, h, color_name, x + w // 2, y + h // 2))
+
         return detected_objects
 
-# Pipeline og enhedsopsætning
-pipeline = dai.Pipeline()
-cam_rgb = pipeline.createColorCamera()
-cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
-cam_rgb.setPreviewSize(1280, 720)
-cam_rgb.setInterleaved(False)
-xout_video = pipeline.createXLinkOut()
-xout_video.setStreamName("video")
-cam_rgb.preview.link(xout_video.input)
-
-with dai.Device(pipeline) as device:
-    video_queue = device.getOutputQueue(name="video", maxSize=1, blocking=False)
-
-    detector_red = ObjectDetector(base_lower_red1, base_upper_red1, base_lower_red2, base_upper_red2, "red")
-    detector_green = ObjectDetector(base_lower_green, base_upper_green, base_lower_green, base_upper_green, "green")
-
-    print("Tryk på 'q' for at afslutte.")
+# Brug kameraet til at streame video og identificere objekter
+if __name__ == "__main__":
+    camera = OakDCamera()
+    colors = [
+        (base_lower_red1, base_upper_red1, base_lower_red2, base_upper_red2, "red"),
+        (base_lower_green, base_upper_green, base_lower_green, base_upper_green, "green")
+    ]
+    detector = ObjectDetector(colors)
 
     while True:
-        frame = video_queue.get().getCvFrame()
+        frame = camera.get_frame()
+        detected_objects = detector.detect_objects(frame)
 
-        # Detekter røde objekter
-        detected_objects_red = detector_red.detect_object(frame)
-        for obj in detected_objects_red:
-            shape, x, y, w, h, color = obj
-            if shape == "circle":
-                cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 0, 255), 2)
-            cv2.putText(frame, f"{color} {shape} ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        for obj in detected_objects:
+            shape, x, y, w, h, color, center_x, center_y = obj
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(frame, f"{shape} ({color})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            cv2.putText(frame, f"({center_x}, {center_y})", (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-        # Detekter grønne objekter
-        detected_objects_green = detector_green.detect_object(frame)
-        for obj in detected_objects_green:
-            shape, x, y, w, h, color = obj
-            if shape == "circle":
-                cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 255, 0), 2)
-            cv2.putText(frame, f"{color} {shape} ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.imshow("Video Stream", frame)
 
-        cv2.imshow("Frame", frame)
-
+        # Tryk på 'q' for at afslutte streamen
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
