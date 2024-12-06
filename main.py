@@ -1,8 +1,8 @@
 from vision.visionCameraController import VisionCameraController
-from vision.visionImageProcessor import VisionImageProcessor
 from vision.visionObjectDetector import VisionObjectDetector
 from robotArm.robotArmController import RobotArmController
 from utils.dataUtils import DataUtils
+from vision.visionImageProcessor import VisionImageProcessor
 
 def main():
     # Initialize system components

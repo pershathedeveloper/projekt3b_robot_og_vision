@@ -1,17 +1,22 @@
+ # Python
+ __pycache__/
+ *.py[cod]
+ *$py.class
 
-.vscode/
+ # Virtual environment
+ venv/
+ env/
 
-robotArm/__pycache__/robotArmController.cpython-313.pyc
+ # IDE files
+ .vscode/
+ .idea/
 
-robotArm/__pycache__/robotArmKinematics.cpython-313.pyc
+ # Logs
+ *.log
 
-robotArm/__pycache__/robotArmRTDE.cpython-313.pyc
+ # Temporary files
+ *.tmp
 
-tests/__pycache__/testRobotArm.cpython-313.pyc
-
-tests/__pycache__/testVisionCamera.cpython-313.pyc
-
-vision/__pycache__/visionCameraController.cpython-313.pyc
-.vscode/ 
-
-other/
+ # Operating system files
+ .DS_Store
+ Thumbs.db
