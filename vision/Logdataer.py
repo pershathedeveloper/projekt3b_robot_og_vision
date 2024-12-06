@@ -1,6 +1,8 @@
 import depthai as dai
 import cv2
 import numpy as np
+import rtde_control
+import rtde_receive
 
 # Grundlæggende HSV-værdier for farver
 base_lower_red1 = np.array([0, 100, 50])  # Grundværdier for rød
@@ -30,31 +32,8 @@ class OakDCamera:
         frame = in_video.getCvFrame()
         return frame
 
-    def detect_objects(self, frame, lower_color, upper_color):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask1 = cv2.inRange(hsv, lower_color[0], upper_color[0])
-        mask2 = cv2.inRange(hsv, lower_color[1], upper_color[1])
-        mask = cv2.bitwise_or(mask1, mask2)
-
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        detected_objects = []
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < 500:  # Filtrer meget små objekter
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            epsilon = 0.02 * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
-
-            if len(approx) >= 8:  # Hvis konturen har mange hjørner, er det sandsynligvis en cirkel
-                shape = "circle"
-                detected_objects.append((shape, x, y, w, h, self.color_name))
-                
-        return detected_objects
-
 class ObjectDetector:
-    def __init__(self, lower_color1, upper_color1, lower_color2, upper_color2, color_name):
+    def __init__(self, lower_color1, upper_color1, lower_color2=None, upper_color2=None, color_name=""):
         self.lower_color1 = lower_color1
         self.upper_color1 = upper_color1
         self.lower_color2 = lower_color2
@@ -64,8 +43,11 @@ class ObjectDetector:
     def detect_object(self, frame):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask1 = cv2.inRange(hsv, self.lower_color1, self.upper_color1)
-        mask2 = cv2.inRange(hsv, self.lower_color2, self.upper_color2)
-        mask = cv2.bitwise_or(mask1, mask2)
+        if self.lower_color2 is not None and self.upper_color2 is not None:
+            mask2 = cv2.inRange(hsv, self.lower_color2, self.upper_color2)
+            mask = cv2.bitwise_or(mask1, mask2)
+        else:
+            mask = mask1
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         detected_objects = []
@@ -79,10 +61,27 @@ class ObjectDetector:
             approx = cv2.approxPolyDP(contour, epsilon, True)
 
             if len(approx) >= 8:  # Hvis konturen har mange hjørner, er det sandsynligvis en cirkel
-                shape = "circle"
-                detected_objects.append((shape, x, y, w, h, self.color_name))
-                
+                detected_objects.append((x, y, w, h, self.color_name))
         return detected_objects
+
+# RTDE setup
+ur_robot_ip = "192.168.0.51"  # Skift til UR-robotens IP-adresse
+rtde_c = rtde_control.RTDEControlInterface(ur_robot_ip)
+rtde_r = rtde_receive.RTDEReceiveInterface(ur_robot_ip)
+
+# Kalibreringsfunktion (skal tilpasses din opsætning)
+def convert_to_robot_coordinates(x, y, w, h):
+    # Eksempel på en simpel lineær transformation
+    # Disse værdier skal tilpasses baseret på din kalibrering
+    scale_x = 0.001  # Skaleringsfaktor for x-aksen
+    scale_y = 0.001  # Skaleringsfaktor for y-aksen
+    offset_x = 0.5   # Offset for x-aksen
+    offset_y = 0.5   # Offset for y-aksen
+
+    robot_x = x * scale_x + offset_x
+    robot_y = y * scale_y + offset_y
+    robot_z = 0.1  # Eksempel på en fast z-koordinat
+    return robot_x, robot_y, robot_z
 
 # Pipeline og enhedsopsætning
 pipeline = dai.Pipeline()
@@ -98,7 +97,7 @@ with dai.Device(pipeline) as device:
     video_queue = device.getOutputQueue(name="video", maxSize=1, blocking=False)
 
     detector_red = ObjectDetector(base_lower_red1, base_upper_red1, base_lower_red2, base_upper_red2, "red")
-    detector_green = ObjectDetector(base_lower_green, base_upper_green, base_lower_green, base_upper_green, "green")
+    detector_green = ObjectDetector(base_lower_green, base_upper_green, color_name="green")
 
     print("Tryk på 'q' for at afslutte.")
 
@@ -108,22 +107,25 @@ with dai.Device(pipeline) as device:
         # Detekter røde objekter
         detected_objects_red = detector_red.detect_object(frame)
         for obj in detected_objects_red:
-            shape, x, y, w, h, color = obj
-            if shape == "circle":
-                cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 0, 255), 2)
-            cv2.putText(frame, f"{color} {shape} ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+            x, y, w, h, color = obj
+            cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 0, 255), 2)
+            cv2.putText(frame, f"{color} circle ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+            # Konverter billedkoordinater til robotkoordinater
+            robot_x, robot_y, robot_z = convert_to_robot_coordinates(x + w // 2, y + h // 2, w, h)
+            print(f"Sending coordinates to robot: x={robot_x}, y={robot_y}, z={robot_z}")
+            rtde_c.moveL([robot_x, robot_y, robot_z, 0, 0, 0], speed=0.1, acceleration=0.1)
 
         # Detekter grønne objekter
         detected_objects_green = detector_green.detect_object(frame)
         for obj in detected_objects_green:
-            shape, x, y, w, h, color = obj
-            if shape == "circle":
-                cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 255, 0), 2)
-            cv2.putText(frame, f"{color} {shape} ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            x, y, w, h, color = obj
+            cv2.circle(frame, (x + w // 2, y + h // 2), w // 2, (0, 255, 0), 2)
+            cv2.putText(frame, f"{color} circle ({x}, {y})", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         cv2.imshow("Frame", frame)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cv2.destroyAllWindows()
+    rtde_c.stopScript()
